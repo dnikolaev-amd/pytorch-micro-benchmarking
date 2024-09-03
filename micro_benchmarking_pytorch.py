@@ -1,3 +1,6 @@
+import io
+import re
+from contextlib import redirect_stdout
 import torch
 import torchvision
 import random
@@ -303,8 +306,10 @@ def run_benchmarking(local_rank, params):
 
     ## warmup.
     print ("INFO: running forward and backward for warmup.")
-    forwardbackward(inp, optimizer, network, target, amp_opt_level)
-    forwardbackward(inp, optimizer, network, target, amp_opt_level)
+    print(network)
+    # forwardbackward(inp, optimizer, network, target, amp_opt_level)
+    # forwardbackward(inp, optimizer, network, target, amp_opt_level)
+    return
 
     time.sleep(1)
     torch.cuda.synchronize()
@@ -386,8 +391,26 @@ def run_benchmarking(local_rank, params):
       print ("Time per mini-batch : {}".format(time_per_batch))
       print ("Throughput [img/sec] : {}".format(batch_size*world_size/time_per_batch))
 
+def print_to_string(*args, **kwargs):
+    output = io.StringIO()
+    print(*args, file=output, **kwargs)
+    contents = output.getvalue()
+    output.close()
+    return contents
+
 def main():
-    run_benchmarking_wrapper(copy.deepcopy(args))
+    for m in models:
+        args.network = m
+        try:
+            f = io.StringIO()
+            with redirect_stdout(f):
+                run_benchmarking_wrapper(copy.deepcopy(args))
+            out = f.getvalue()
+            is_batchnorm = re.search(r'BatchNorm', out, re.IGNORECASE)
+            print(f"{m} \t: {'Yes' if is_batchnorm is not None else 'No'}")
+        except Exception as e:
+            print(f"{m} \t: {e}")
+            continue
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
