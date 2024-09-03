@@ -306,10 +306,13 @@ def run_benchmarking(local_rank, params):
 
     ## warmup.
     print ("INFO: running forward and backward for warmup.")
-    print(network)
-    # forwardbackward(inp, optimizer, network, target, amp_opt_level)
-    # forwardbackward(inp, optimizer, network, target, amp_opt_level)
-    return
+    if params.print_models_filter:
+        print(network)
+        return
+    else:
+        forwardbackward(inp, optimizer, network, target, amp_opt_level)
+        forwardbackward(inp, optimizer, network, target, amp_opt_level)
+    
 
     time.sleep(1)
     torch.cuda.synchronize()
@@ -399,21 +402,25 @@ def print_to_string(*args, **kwargs):
     return contents
 
 def main():
-    for m in models:
-        args.network = m
-        try:
-            f = io.StringIO()
-            with redirect_stdout(f):
-                run_benchmarking_wrapper(copy.deepcopy(args))
-            out = f.getvalue()
-            is_batchnorm = re.search(r'BatchNorm', out, re.IGNORECASE)
-            print(f"{m} \t: {'Yes' if is_batchnorm is not None else 'No'}")
-        except Exception as e:
-            print(f"{m} \t: {e}")
-            continue
+    if args.print_models_filter:
+        for m in models:
+            args.network = m
+            try:
+                f = io.StringIO()
+                with redirect_stdout(f):
+                    run_benchmarking_wrapper(copy.deepcopy(args))
+                out = f.getvalue()
+                is_batchnorm = re.search(args.print_models_filter, out, re.IGNORECASE)
+                print(f"{m} \t: {'Yes' if is_batchnorm is not None else 'No'}")
+            except Exception as e:
+                print(f"{m} \t: {e}")
+                continue
+    else:
+        run_benchmarking_wrapper(copy.deepcopy(args))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument("--print-models-filter", type=str, required=False, help="Print models which contain filtered string in the layers (ex. \"batchnorm\")")
     parser.add_argument("--network", type=str, choices=get_network_names(), required=True, help="Network to run.")
     parser.add_argument("--batch-size" , type=int, required=False, default=64, help="Batch size (will be split among devices used by this invocation)")
     parser.add_argument("--iterations", type=int, required=False, default=20, help="Iterations")
